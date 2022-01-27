@@ -1,0 +1,14 @@
+todo:
+1. pull image
+2. set up ssh (not done yet)
+3. update code (cleaner logging messsage)
+3'. prepare intermediate results
+4. RQ3
+5. RQ4
+6. RQ5
+
+
+
+minor:
+change update_time to num_loops
+timeout to query_timeout
