@@ -15,7 +15,7 @@ The artifact consists of four main components:
 
 ```
 docker pull icsesub2022/paper360:artifact
-docker run --net=host -it --cpus 8 -m 8G --user postgres -v {/a/directory/in/your/host}:/home/postgres/exp icsesub2022/paper360:artifact1 bash
+docker run --net=host -it --cpus 2 -m 8G --user postgres -v {/a/directory/in/your/host}:/home/postgres/exp icsesub2022/paper360:artifact1 bash
 // after starting and attaching to the docker container, run the following commands: 
 cd /workspace
 eval "$(direnv hook bash)"
