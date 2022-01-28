@@ -1,0 +1,999 @@
+#,DBMS,Submitted,Classification,Link,,Brief Summary,SCOTT schema,,,TPC-H schema,,
+,,,,,Notes,,Q1,Q2,time difference,Q1,Q2,time difference
+1,CockroachDB,Yes,"Confirmed (Fixed, Previously Known), Unique",https://github.com/cockroachdb/cockroach/issues/51820,,suboptimal behavior related to the scalar subquery,select sal from emp where (select job from bonus order by ename limit 1) is not distinct from 'random string';,select emp.sal from emp left outer join (select * from bonus order by ename limit 1) as t on true where t.job is not distinct from 'random string';,5.1,"SELECT o_orderpriority
+FROM   orders
+WHERE  (SELECT n_comment
+        FROM   nation
+        ORDER  BY n_comment
+        LIMIT  1) IS NOT DISTINCT FROM 'random string';","SELECT o_orderpriority
+FROM  orders
+LEFT OUTER JOIN
+                (SELECT   *
+                 FROM     nation
+                 ORDER BY n_comment limit 1) AS t ON TRUE
+WHERE t.n_comment IS NOT DISTINCT FROM 'random string'; ",188.6
+2,CockroachDB,Yes,Backlogged,https://github.com/cockroachdb/cockroach/issues/54160,"See the response to the next entry, which also mentions this bug report (issue 54160, incorrectly referenced as 54060).",suboptimal behavior related to the STDDEV function,"select cast (stddev(sal) as DECIMAL(8,3)) from emp;","SELECT Cast(Power(( CASE 
+                      WHEN Count(sal * sal) = 0 THEN 
+                      NULL 
+                      ELSE COALESCE(Sum(sal * sal), 0) 
+                    END - CASE 
+                            WHEN Count(sal) = 0 THEN NULL 
+                            ELSE COALESCE(Sum(sal), 0) 
+                          END * CASE 
+                                  WHEN Count(sal) = 0 THEN NULL 
+                                  ELSE COALESCE(Sum(sal), 0) 
+                                END / Count(sal) ) / 
+                              CASE 
+                              WHEN Count(sal) = 1 
+                                                                 THEN NULL 
+                                                                   ELSE 
+                              Count(sal) - 1 
+                                                                 END, 0.5) AS 
+            DECIMAL( 
+                   8,3)) AS ""EXPR$0"" 
+FROM   emp;",15.3,"SELECT stddev(""p_retailprice"") 
+FROM   ""part""; ","SELECT Cast(Power(( CASE 
+                      WHEN Count(""p_retailprice"" * ""p_retailprice"") = 0 THEN 
+                      NULL 
+                      ELSE COALESCE(Sum(""p_retailprice"" * ""p_retailprice""), 0) 
+                    END - CASE 
+                            WHEN Count(""p_retailprice"") = 0 THEN NULL 
+                            ELSE COALESCE(Sum(""p_retailprice""), 0) 
+                          END * CASE 
+                                  WHEN Count(""p_retailprice"") = 0 THEN NULL 
+                                  ELSE COALESCE(Sum(""p_retailprice""), 0) 
+                                END / Count(""p_retailprice"") ) / 
+                              CASE 
+                              WHEN Count(""p_retailprice"") = 1 
+                                                                 THEN NULL 
+                                                                   ELSE 
+                              Count(""p_retailprice"") - 1 
+                                                                 END, 0.5) AS 
+            DECIMAL( 
+                   19, 16)) AS ""EXPR$0"" 
+FROM   ""part"" ;",11.0
+3,CockroachDB,Yes,Backlogged,https://github.com/cockroachdb/cockroach/issues/54161,,suboptimal behavior related to the VARIANCE function,"SELECT CAST(VARIANCE(""sal"") AS DECIMAL(15, 5)) FROM emp;","SELECT CAST(CAST((CASE WHEN COUNT(*) = 0 THEN NULL ELSE COALESCE(SUM(""sal"" * ""sal""), 0) END - CASE WHEN COUNT(*) = 0 THEN NULL ELSE COALESCE(SUM(""sal""), 0) END * CASE WHEN COUNT(*) = 0 THEN NULL ELSE COALESCE(SUM(""sal""), 0) END / COUNT(*)) / CASE WHEN COUNT(*) = 1 THEN NULL ELSE COUNT(*) - 1 END AS decimal(15,5)) AS DECIMAL(15, 5)) FROM emp;",17.3,"SELECT variance(""p_retailprice"") 
+FROM   ""part""; ","SELECT Cast(Cast(( CASE 
+                     WHEN Count(*) = 0 THEN NULL 
+                     ELSE COALESCE(Sum(""p_retailprice"" * ""p_retailprice""), 0) 
+                   END - CASE 
+                           WHEN Count(*) = 0 THEN NULL 
+                           ELSE COALESCE(Sum(""p_retailprice""), 0) 
+                         END * CASE 
+                                 WHEN Count(*) = 0 THEN NULL 
+                                 ELSE COALESCE(Sum(""p_retailprice""), 0) 
+                               END / Count(*) ) / CASE 
+                                                    WHEN Count(*) = 1 THEN NULL 
+                                                    ELSE Count(*) - 1 
+                                                  END AS DECIMAL(15, 5)) AS 
+                   DECIMAL(15, 5)) 
+FROM   ""part"";",11.0
+4,CockroachDB,Yes,"Confirmed (Not Fixed, Previously Unknown), Unique",https://github.com/cockroachdb/cockroach/issues/57330,"The developers acknowledge the issue and mention that ""this particular case wouldn't be hard to implement [...].""
+
+",suboptimal behavior related to the GROUP BY and JOIN operator,"SELECT ""emp"".""empno"", 
+       ""bonus"".""job"" 
+FROM   ""emp"" 
+       LEFT JOIN ""bonus"" 
+              ON true 
+GROUP  BY ""emp"".""empno"", 
+          ""bonus"".""job"" 
+LIMIT  30;","SELECT * 
+FROM   (SELECT ""empno"" 
+        FROM   ""emp"") AS ""t2"" 
+       LEFT JOIN (SELECT ""job"" 
+                  FROM   ""bonus"" 
+                  GROUP  BY ""job"") AS ""t3"" 
+              ON true 
+LIMIT  30; ",150.0,"SELECT ""region"".""r_regionkey"", 
+       ""supplier"".""s_address"" 
+FROM   ""region"" 
+       LEFT JOIN ""supplier"" 
+              ON true 
+GROUP  BY ""region"".""r_regionkey"", 
+          ""supplier"".""s_address"" 
+LIMIT  30; ","SELECT * 
+FROM   (SELECT ""r_regionkey"" 
+        FROM   ""region"") AS ""t2"" 
+       LEFT JOIN (SELECT ""s_address"" 
+                  FROM   ""supplier"" 
+                  GROUP  BY ""s_address"") AS ""t3"" 
+              ON true 
+LIMIT  30; ",4.0
+5,CockroachDB,Yes,"Confirmed (Fixed, Previously Unknown), Unique",https://github.com/cockroachdb/cockroach/issues/58382,,suboptimal behavior related to duplicate GROUP BY,"SELECT ""ename""
+FROM (SELECT ""ename""
+FROM ""emp""
+WHERE ""ename"" NOT LIKE 'Okoye John'
+GROUP BY ""ename"", ""sal"", ""mgr"", ""job"") AS ""t2""
+GROUP BY ""ename"";","SELECT ""ename""
+FROM ""emp""
+WHERE ""ename"" NOT LIKE 'Okoye John'
+GROUP BY ""ename"";",2.1,"SELECT ""c_phone""
+FROM (SELECT ""c_phone""
+FROM ""customer""
+WHERE ""c_phone"" NOT LIKE '13-750-942-6364'
+GROUP BY ""c_phone"", ""c_acctbal"") AS ""t2""
+GROUP BY ""c_phone"";","SELECT ""c_phone""
+FROM ""customer""
+WHERE ""c_phone"" NOT LIKE '13-750-942-6364'
+GROUP BY ""c_phone"";",2.3
+6,CockroachDB,Yes,"Confirmed (Fixed, Previously Unknown), Unique",https://github.com/cockroachdb/cockroach/issues/57566,"The developers mention that this is ""an interesting case"".",suboptimal behavior related to the DISTINCT operator,"select job, sal, comm, deptno from emp where job = 'Technical ' group by job, sal,comm,deptno limit 13;","select Cast('Technical' AS VARCHAR(10)) as ""job"", sal, comm, deptno from emp where ""job"" = 'Technical ' group by sal, comm, deptno limit 13;",15.6,"SELECT   ""l_linenumber"", 
+         ""l_shipinstruct"", 
+         ""l_suppkey"" AS ""c_2"", 
+         ""l_returnflag"", 
+         ""l_suppkey"", 
+         ""l_discount"" 
+FROM     ""lineitem"" 
+WHERE    ""l_returnflag"" = 'N' 
+GROUP BY ""l_linenumber"", 
+         ""l_shipinstruct"", 
+         ""l_suppkey"", 
+         ""l_returnflag"", 
+         ""l_discount""FETCH next 13 rows only;","SELECT   ""l_linenumber"", 
+         ""l_shipinstruct"", 
+         ""l_suppkey""          AS ""c_2"", 
+         Cast('N' AS CHAR(1)) AS ""l_returnflag"", 
+         ""l_suppkey"", 
+         ""l_discount"" 
+FROM     ""lineitem"" 
+WHERE    ""l_returnflag"" = 'N' 
+GROUP BY ""l_suppkey"", 
+         ""l_linenumber"", 
+         ""l_discount"", 
+         ""l_shipinstruct""FETCH next 13 rows only;",169.8
+7,CockroachDB,Yes,"Confirmed (Fixed, Previously Unknown), Unique",https://github.com/cockroachdb/cockroach/issues/58283,The developers state that this is probably due to a missing rule.,suboptimal behavior related to predicate evaluation,"select ename, sal, job, deptno from emp where job = 'Technical ' IS true and job not like 'Technical ';","select ename, sal, job, deptno from emp where job = 'Technical ' and job not like 'Technical ';                                                                                                                        ",20.9,"SELECT ""s_suppkey"", 
+       ""s_comment"", 
+       ""s_nationkey"" 
+FROM   ""supplier"" 
+WHERE  ""s_comment"" NOT LIKE '. slyly regular pinto bea' 
+       AND ""s_comment"" = '. slyly regular pinto bea' IS TRUE; ","SELECT ""s_suppkey"", 
+       ""s_comment"", 
+       ""s_nationkey"" 
+FROM   ""supplier"" 
+WHERE  ""s_comment"" NOT LIKE '. slyly regular pinto bea' 
+       AND ""s_comment"" = '. slyly regular pinto bea'; ",49.0
+8,CockroachDB,Yes,Backlogged,https://github.com/cockroachdb/cockroach/issues/58377,,suboptimal behavior related to unnecessary aggregate functions,"SELECT   Max(""sal"") AS ""c_0""
+FROM     ""emp""
+GROUP BY ""empno""
+FETCH next 6 rows only;","SELECT (""sal"") AS ""c_0""
+FROM     ""emp""
+GROUP BY ""empno""
+FETCH next 6 rows only;",5.1,"SELECT   Max(""c_acctbal"") AS ""c_0"" 
+FROM     ""customer"" 
+GROUP BY ""c_custkey""
+FETCH next 6 rows only;","SELECT ""c_acctbal"" AS ""c_0"" 
+FROM   ""customer""
+FETCH next 6 rows only;",13.4
+9,CockroachDB,Yes,"Confirmed (Fixed, Previously Known), Unique",https://github.com/cockroachdb/cockroach/issues/58284,,suboptimal behavior related to string casting,"select Cast('Technical' AS VARCHAR(10)) as ""job"", sal, comm, deptno from emp where ""job"" = 'Technical D';","select job, sal, comm, deptno from emp where ""job"" = 'Technical D';",2.0,"SELECT ""o_orderkey"", 
+       ""o_orderpriority"", 
+       ""o_orderdate"", 
+       ""o_clerk"", 
+       Cast(' foxes. pending accounts at the pending, silent asymptot' AS VARCHAR) AS ""o_comment"" 
+FROM   ""orders"" 
+WHERE  ""o_orderpriority"" = '5-LOW          ' IS NOT true 
+AND    ""o_comment"" = ' foxes. pending accounts at the pending, silent asymptot' FETCH next 19 rows only;","SELECT ""o_orderkey"", 
+       ""o_orderpriority"", 
+       ""o_orderdate"", 
+       ""o_clerk"", 
+       ""o_comment"" 
+FROM   ""orders"" 
+WHERE  ""o_orderpriority"" = '5-LOW          ' IS NOT true 
+AND    ""o_comment"" = ' foxes. pending accounts at the pending, silent asymptot' FETCH next 19 rows only;",2.0
+10,CockroachDB,Yes,"Unconfirmed (False Positive), Unique",https://github.com/cockroachdb/cockroach/issues/58383,,suboptimal behavior related to the UNION operator,"SELECT ""sal"", 
+       ""ename"" 
+FROM   ""emp"" 
+UNION 
+SELECT ""empno"", 
+       ""ename"" 
+FROM   ""emp"" FETCH next 38 rows only;","SELECT   ""sal"", 
+         ""ename"" 
+FROM     ( 
+                SELECT ""sal"", 
+                       ""ename"" 
+                FROM   ""emp"" 
+                UNION ALL 
+                SELECT ""empno"", 
+                       ""ename"" 
+                FROM   ""emp"" ) AS ""t16"" 
+GROUP BY ""sal"", 
+         ""ename"" FETCH next 38 rows only;",2.3,"SELECT ""s_nationkey"", 
+       ""s_comment"" 
+FROM   ""supplier"" 
+UNION 
+SELECT ""s_suppkey"", 
+       ""s_comment"" 
+FROM   ""supplier""FETCH next 38 rows only;","SELECT   ""s_nationkey"", 
+         ""s_comment"" 
+FROM     ( 
+                SELECT ""s_nationkey"", 
+                       ""s_comment"" 
+                FROM   ""supplier"" 
+                UNION ALL 
+                SELECT ""s_suppkey"", 
+                       ""s_comment"" 
+                FROM   ""supplier""FETCH next 38 rows only) AS ""t16"" 
+GROUP BY ""s_nationkey"", 
+         ""s_comment""",46.3
+11,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to fraction number casting,"SELECT *
+FROM emp
+WHERE CAST(empno + 10 / 2 AS INTEGER) = 13","SELECT *
+FROM emp
+WHERE empno + 5 = 13",180.3,NA,NA,NA
+12,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to projection and filter,"SELECT ""emp5"".""comm"",
+       ""emp5"".""hiredate"",
+       ""emp5"".""mgr""
+FROM ""emp"" AS ""emp5""
+LEFT JOIN
+  (SELECT 2541 AS ""deptno"",
+          TRUE AS ""i""
+   FROM ""dept""
+   WHERE ""deptno"" = 2541) AS ""t20"" ON ""emp5"".""empno"" = ""t20"".""deptno""
+WHERE ""emp5"".""empno"" <= 2801
+  OR (""emp5"".""job"" LIKE 'Sales Repr'
+      OR ""t20"".""i"" IS NULL)","SELECT ""emp3"".""comm"",
+       ""emp3"".""hiredate"",
+       ""emp3"".""mgr""
+FROM ""emp"" AS ""emp3""
+LEFT JOIN
+  (SELECT ""deptno"",
+          TRUE AS ""i""
+   FROM ""dept""
+   WHERE ""deptno"" = 2541) AS ""t14"" ON ""emp3"".""empno"" = ""t14"".""deptno""
+WHERE ""emp3"".""empno"" <= 2801
+  OR (""emp3"".""job"" LIKE 'Sales Repr'
+      OR ""t14"".""i"" IS NULL)",3.1,NA,NA,NA
+13,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to EXIST,"SELECT ""ename"" AS ""bonus_ename""
+   FROM ""bonus""
+   WHERE ""sal"" = 432
+     AND ""ename"" LIKE '%' || 'ue ' || '%'
+     OR NOT EXISTS
+       (SELECT ""deptno""
+        FROM ""dept""
+        WHERE ""name"" NOT LIKE 'JK1' FETCH NEXT 3 ROWS ONLY) FETCH NEXT 18 ROWS ONLY","SELECT ""bonus2"".""ename"" AS ""bonus_ename""
+   FROM ""bonus"" AS ""bonus2""
+   LEFT JOIN
+     (SELECT ""i""
+      FROM
+        (SELECT TRUE AS ""i""
+         FROM ""dept""
+         WHERE NOT ""name"" LIKE 'JK1' FETCH NEXT 3 ROWS ONLY) AS ""t29""
+      GROUP BY ""i"") AS ""t30"" ON TRUE
+   WHERE ""bonus2"".""sal"" = 432
+     AND ""bonus2"".""ename"" LIKE '%ue %'
+     OR ""t30"".""i"" IS NULL FETCH NEXT 18 ROWS ONLY",2.1,NA,NA,NA
+14,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to the filter and JOIN operator,"SELECT ""bonus3"".""sal"",
+       ""t20"".""deptno"" AS ""dept_deptno""
+FROM   (SELECT *
+        FROM   ""dept""
+        WHERE  ""name"" = '04') AS ""t20""
+       LEFT JOIN ""bonus"" AS ""bonus3""
+              ON true
+WHERE  ""bonus3"".""comm"" / 56 > 7
+        OR ""bonus3"".""job"" LIKE '%'
+                               || 'a'
+                               || '%' ","SELECT ""bonus3"".""sal"",
+       ""t20"".""deptno"" AS ""dept_deptno""
+FROM   (SELECT *
+        FROM   ""dept""
+        WHERE  ""name"" = '04') AS ""t20""
+       LEFT JOIN (SELECT *
+                  FROM   ""bonus""
+                  WHERE  ""comm"" / 56 > 7
+                          OR ""job"" LIKE '%a%') AS bonus3
+              ON true ",5.9,NA,NA,NA
+15,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to predicate,"SELECT count(d0.c_2454) AS c_2542
+FROM
+  (SELECT 'literal col string' AS c_2454
+   FROM bonus
+   WHERE (bonus.sal / 46) > 2783
+     AND bonus.sal > 9679
+     AND bonus.job NOT LIKE 'Finance Ma'
+   GROUP BY bonus.job,
+            bonus.job,
+            bonus.ename,
+            bonus.comm
+   LIMIT 3) AS d0
+WHERE d0.c_2454 LIKE 'dbwusle'","SELECT COUNT(*) AS ""c_2542""
+FROM
+  (SELECT *
+   FROM (
+         VALUES (NULL)) AS ""t"" (""c_2454"")
+   WHERE 1 = 0) AS ""t6""",669.1,NA,NA,NA
+16,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to casting in predicate,"SELECT ""comm"",
+       'literal col string' AS ""c_1497"",
+       ""sal""
+FROM ""bonus""
+WHERE ""ename"" LIKE '%' || 'auran Batra'
+  AND ""job"" LIKE 'Resear' || '%'
+  OR (""comm"" + 32 = 64
+      OR NOT EXISTS
+        (SELECT *
+         FROM ""dept""
+         WHERE CAST(""deptno"" AS DECIMAL(11, 1)) = 5500.8
+           AND ""deptno"" > 9571))","SELECT ""comm"",
+       'literal col string' AS ""c_1497"",
+       ""sal""
+FROM   ""bonus""
+WHERE  ""ename"" LIKE '%'
+                    || 'auran Batra'
+       AND ""job"" LIKE 'Resear'
+                      || '%'
+        OR ( ""comm"" + 32 = 64
+              OR NOT EXISTS (SELECT *
+                             FROM   ""dept""
+                             WHERE  ""deptno"" = 5500.8
+                                    AND ""deptno"" > 9571) ); ",4.1,NA,NA,NA
+17,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to the filter and JOIN operator,"SELECT    ""emp0"".""mgr"",
+          ""t6"".""dept_deptno"",
+          ""emp0"".""empno""
+FROM      (
+                 SELECT ""deptno"" AS ""dept_deptno""
+                 FROM   ""dept""
+                 WHERE  ""name"" LIKE '%I'
+                 OR     ""name"" LIKE '04'FETCH next 19 rows only) AS ""t6""
+LEFT JOIN ""emp""                           AS ""emp0""
+ON        ""t6"".""dept_deptno"" >= ""emp0"".""empno""
+WHERE     ""emp0"".""hiredate"" = timestamp '2012-04-03 00:00:00'
+OR        ""emp0"".""ename"" LIKE ' Lue Mahula'","SELECT     ""emp0"".""mgr"",
+           ""t6"".""dept_deptno"",
+           ""emp0"".""empno""
+FROM       (
+                  SELECT ""deptno"" AS ""dept_deptno""
+                  FROM   ""dept""
+                  WHERE  ""name"" LIKE '%I'
+                  OR     ""name"" LIKE '04'FETCH next 19 rows only) AS ""t6""
+INNER JOIN
+           (
+                  SELECT *
+                  FROM   ""emp""
+                  WHERE  ""emp"".""hiredate"" = timestamp '2012-04-03 00:00:00'
+                  OR     ""emp"".""ename"" LIKE ' Lue Mahula') AS ""emp0""
+ON         ""t6"".""dept_deptno"" >= ""emp0"".""empno""",109.5,NA,NA,NA
+18,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to windowed function,"SELECT Min(CAST(""t28"".""ename"" AS VARCHAR(20)))
+         OVER (
+           PARTITION BY CAST(""t28"".""ename"" AS VARCHAR(20)) RANGE BETWEEN
+         unbounded
+         preceding AND unbounded following) AS ""c_2471""
+FROM   (SELECT ""ename"",
+               ""job"",
+               ""comm""
+        FROM   ""bonus""
+        WHERE  ""comm"" * 26 > 32
+                OR ( ""ename"" LIKE ' Orville Patnode'
+                      OR NOT ""job"" LIKE 'Director o' )) AS ""t27"",
+       (SELECT *
+        FROM   ""bonus""
+        WHERE  ""comm"" < 7
+               AND ( ""sal"" + 432 = 864
+                     AND ""sal"" / 68 / 9 <= 2783 )) AS ""t28"" ","SELECT Min(CAST(""t28"".""ename"" AS VARCHAR(20)))
+         OVER (
+           PARTITION BY CAST(""t28"".""ename"" AS VARCHAR(20)) RANGE BETWEEN
+         unbounded
+         preceding AND unbounded following) AS ""c_2471""
+FROM   (SELECT ""comm""
+        FROM   ""bonus""
+        WHERE  ""comm"" * 26 > 32
+                OR ( ""ename"" LIKE ' Orville Patnode'
+                      OR NOT ""job"" LIKE 'Director o' )) AS ""t27"",
+       (SELECT *
+        FROM   ""bonus""
+        WHERE  ""comm"" < 7
+               AND ( ""sal"" + 432 = 864
+                     AND ""sal"" / 68 / 9 <= 2783 )) AS ""t28"" ",3.6,NA,NA,NA
+19,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to projection and JOIN operator,"SELECT ""emp9"".""hiredate"",
+       ""t59"".""dept_deptno""
+FROM   (
+              SELECT ""deptno"" AS ""dept_deptno""
+              FROM   ""dept""
+              WHERE  ""deptno"" = 4013FETCH next 17 rows only) AS ""t59"",
+       ""emp""                           AS ""emp9""
+WHERE  ""emp9"".""empno"" > ""t59"".""dept_deptno""
+AND    (
+              ""t59"".""dept_deptno"" + 12 >= 8640
+       OR     ""emp9"".""hiredate"" > timestamp '2016-06-19 00:00:00') offset 19 rows FETCH next 18 rows only","SELECT ""emp9"".""hiredate"",
+       ""t59"".""dept_deptno""
+FROM   (
+              SELECT ""deptno"" AS ""dept_deptno""
+              FROM   ""dept""
+              WHERE  ""deptno"" = 4013FETCH next 17 rows only) AS ""t59"",
+       ""emp""                           AS ""emp9""
+WHERE  ""emp9"".""empno"" > 4013
+AND    (
+              4013 + 12 >= 8640
+       OR     ""emp9"".""hiredate"" > timestamp '2016-06-19 00:00:00') offset 19 rows FETCH next 18 rows only",1.9,NA,NA,NA
+20,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to the filter and JOIN operator,"SELECT ""t29"".""job"",
+       ""t29"".""deptno"" AS ""dept_deptno"",
+       ""t29"".""comm"",
+       ""t29"".""ename"",
+       ""t29"".""sal""
+FROM
+  (SELECT ""t25"".""deptno"",
+          345 >= ""t25"".""deptno"" AS ""$f1"",
+          ""t27"".""ename"",
+          ""t27"".""job"",
+          ""t27"".""sal"",
+          ""t27"".""comm""
+   FROM
+     
+        (SELECT *
+         FROM
+           (SELECT ""deptno""
+            FROM ""dept"") AS ""t24""
+         WHERE ""deptno"" + 89 <= 2541
+           OR ""deptno"" / 9 / 26 <= 8640 and ""deptno"" - 56 <= 4013) AS ""t25""
+   INNER JOIN
+     (SELECT *
+      FROM ""bonus""
+      WHERE ""job"" LIKE 'Revenue Ma'
+        AND ""sal"" = 432) AS ""t27"" ON 345 >= ""t25"".""deptno"" FETCH NEXT 8 ROWS ONLY) AS ""t29""","SELECT ""t29"".""job"",
+       ""t29"".""deptno"" AS ""dept_deptno"",
+       ""t29"".""comm"",
+       ""t29"".""ename"",
+       ""t29"".""sal""
+FROM   (
+                  SELECT     ""t25"".""deptno"",
+                             ""t27"".""ename"",
+                             ""t27"".""job"",
+                             ""t27"".""sal"",
+                             ""t27"".""comm""
+                  FROM       (
+                                    SELECT *
+                                    FROM   (
+                                                  SELECT ""deptno""
+                                                  FROM   ""dept"") AS ""t24""
+                                    WHERE  ""deptno"" + 89 <= 2541
+                                    OR     ""deptno"" / 9 / 26 <= 8640
+                                    AND    ""deptno"" - 56 <= 4013) AS ""t25""
+                  INNER JOIN
+                             (
+                                    SELECT *
+                                    FROM   ""bonus""
+                                    WHERE  ""job"" LIKE 'Revenue Ma'
+                                    AND    ""sal"" = 432) AS ""t27""
+                  ON         ""t27"".sal - 87 >= ""t25"".""deptno"" FETCH next 8 rows only) AS ""t29""",3.4,NA,NA,NA
+21,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to projection and JOIN operator,"SELECT    ""t12"".""c_4741"", 
+          ""dept1"".""name"" 
+FROM      ( 
+                 SELECT 2333 AS ""c_4741"" 
+                 FROM   ""emp"" 
+                 WHERE  ""empno"" * 79 < 1573.8 
+                 OR     ( 
+                               ""empno"" - 3 <= 2801 
+                        OR     ""sal""   - 100 > 7049)) AS ""t12"" 
+FULL JOIN ""dept""                                      AS ""dept1"" 
+ON        ""dept1"".""deptno"" / 516 > ""t12"".""c_4741"" 
+WHERE     ""dept1"".""deptno"" >= 4013FETCH next 13 rows only","SELECT    ""t12"".""c_4741"",
+          ""dept1"".""name""
+FROM      (
+                 SELECT 2333 AS ""c_4741""
+                 FROM   ""emp""
+                 WHERE  ""empno"" * 79 < 1573.8
+                 OR     (
+                               ""empno"" - 3 <= 2801
+                        OR     ""sal""   - 100 > 7049)) AS ""t12""
+FULL JOIN
+          (
+                 SELECT ""deptno"",
+                        ""name"",
+                        ""deptno"" / 516 > 2333 AS ""$f2""
+                 FROM   ""dept"") AS ""dept1""
+ON        ""dept1"".""$f2""
+WHERE     ""dept1"".""deptno"" >= 4013FETCH next 13 rows only",52.1,NA,NA,NA
+22,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to predicate,"SELECT dept.deptno
+FROM   dept
+WHERE  (
+              dept.NAME LIKE '%'
+                     || '2')
+AND    dept.NAME IS NOT distinct
+FROM   '04' limit 1;","SELECT ""deptno"",
+          ""name""
+   FROM (
+         VALUES (NULL,
+                 NULL,
+                 NULL)) AS ""t"" (""deptno"",
+                                ""name"",
+                                ""$f0"")
+   WHERE 1 = 0",8.9,NA,NA,NA
+23,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to projection and JOIN operator,"SELECT ""hiredate""
+FROM
+  (SELECT 
+          ""t24"".""CAST4"" AS ""hiredate"",
+          ""t24"".""CAST7"" AS ""deptno"",
+          ""bonus4"".""job"" AS ""job0""
+   FROM
+     (SELECT ""mgr"",
+             CAST(""hiredate"" AS TIMESTAMP(0)) AS ""CAST4"",
+             CAST(""deptno"" AS INTEGER) AS ""CAST7"",
+             CAST(""slacker"" AS BOOLEAN) AS ""CAST8""
+      FROM ""emp""
+      WHERE ""ename"" LIKE '%nnama%') AS ""t24""
+   LEFT JOIN ""bonus"" AS ""bonus4"" ON TRUE) AS ""t25""
+WHERE ""t25"".""job0"" LIKE '%o'
+  OR ""t25"".""deptno"" - 100 < 8640 FETCH NEXT 4 ROWS ONLY","SELECT ""hiredate""
+FROM   (
+                 SELECT    Cast(""t2"".""hiredate"" AS TIMESTAMP(0)) AS ""hiredate"",
+                           Cast(""t2"".""deptno"" AS INTEGER)        AS ""deptno"",
+                           ""bonus0"".""job""                        AS ""job0""
+                 FROM      (
+                                  SELECT *
+                                  FROM   ""emp""
+                                  WHERE  ""ename"" LIKE '%nnama%') AS ""t2""
+                 LEFT JOIN ""bonus""                               AS ""bonus0""
+                 ON        true) AS ""t3""
+WHERE  ""t3"".""job0"" LIKE '%o'
+OR     ""t3"".""deptno"" - 100 < 8640 FETCH next 4 rows only",2.2,NA,NA,NA
+24,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to the SET and JOIN operator,"SELECT *
+FROM
+  (SELECT ""bonus_ename""
+   FROM
+     (SELECT ""ename"" AS ""bonus_ename""
+      FROM ""bonus""
+      WHERE ""ename"" IS NULL
+        AND ' Lauran Batra' IS NULL
+        OR ""ename"" = ' Lauran Batra') AS ""t80""
+   WHERE ""bonus_ename"" LIKE ' Melva Shelko'
+   GROUP BY ""bonus_ename""
+   UNION ALL SELECT ""name""
+   FROM ""dept""
+   WHERE ""name"" IS NULL
+     AND 'JK1' IS NULL
+     OR (""name"" = 'JK1'
+         OR ""deptno"" <= 9571)
+   GROUP BY ""name"" FETCH NEXT 14 ROWS ONLY) AS ""t87""
+WHERE NOT ""bonus_ename"" LIKE ' Orville Patnode'","SELECT *
+FROM
+  (SELECT *
+   FROM
+     (SELECT ""ename"" AS ""bonus_ename""
+      FROM ""bonus""
+      WHERE ""ename"" IS NULL
+        AND ' Lauran Batra' IS NULL
+        OR ""ename"" = ' Lauran Batra'
+      GROUP BY ""ename"") AS ""t21""
+   WHERE ""bonus_ename"" LIKE ' Melva Shelko'
+   UNION ALL SELECT ""name""
+   FROM ""dept""
+   WHERE ""name"" IS NULL
+     AND 'JK1' IS NULL
+     OR (""name"" = 'JK1'
+         OR ""deptno"" <= 9571)
+   GROUP BY ""name"" FETCH NEXT 14 ROWS ONLY) AS ""t27""
+WHERE NOT ""bonus_ename"" LIKE ' Orville Patnode'",2.6,NA,NA,NA
+25,CockroachDB,Yes,Pending,https://github.com/cockroachdb/cockroach/issues/73628,"The developers asked us to reproduce this issue on the latest version of the DBMS, so we just updated the report and are waiting for feedback.
+",suboptimal behavior related to the GROUP BY and LIMIT operator,"SELECT ""ename""
+   FROM
+     (SELECT ""ename""
+      FROM ""emp""
+      WHERE ""empno"" - 67 > 2801
+        OR ""ename"" LIKE ' La%'
+      GROUP BY ""ename"" FETCH NEXT 18 ROWS ONLY) AS ""t53""
+WHERE ""ename"" NOT LIKE 'mlmhwzbjc' FETCH NEXT 8 ROWS ONLY;","SELECT *
+FROM
+  (SELECT *
+   FROM (
+         VALUES (NULL)) AS ""t"" (""c_4910"")
+   WHERE 1 = 0
+   UNION SELECT ""ename""
+   FROM ""emp""
+   WHERE ""empno"" - 67 > 2801
+     OR ""ename"" LIKE ' La%'
+   GROUP BY ""ename"" FETCH NEXT 18 ROWS ONLY) AS ""t71""
+WHERE ""c_4910"" NOT LIKE 'mlmhwzbjc' FETCH NEXT 8 ROWS ONLY",16.3,NA,NA,NA
+26,PostgreSQL,Yes,"Unconfirmed (Future/missing optimization, Fixed, Previously Known), Unique",https://www.postgresql.org/message-id/CAApHDvqKE2MLsQidBtY8AaM%2BJ9VWN5uct3dQ92HnfDKzc4f%3DcQ%40mail.gmail.com,"The developers did not confirm that this was an actual bug, but they have a fix for it in the works.",suboptimal behavior related to the GROUP BY operator (remove unnecessary distinct on unique tuples),"SELECT ""empno""
+FROM   ""emp""
+WHERE  empno > 100;  ","SELECT ""empno""
+FROM   ""emp""
+WHERE  empno > 100
+GROUP  BY empno;",2.9,"SELECT ""s_suppkey"" 
+FROM   ""supplier"" 
+WHERE  s_suppkey > 100;  ","SELECT ""s_suppkey"" 
+FROM   ""supplier"" 
+WHERE  s_suppkey > 100 
+GROUP  BY s_suppkey;",2.5
+27,PostgreSQL,Yes,"Unknown, Unique",https://www.postgresql.org/message-id/16635-b06e1ff6be5a1975@postgresql.org,,suboptimal behavior related to the UNION operator,"SELECT ""ename""
+FROM   ""emp""
+UNION
+SELECT ""job""
+FROM   ""emp"";","select ename
+from (SELECT ""ename""
+FROM   ""emp""
+UNION ALL
+SELECT ""job""
+FROM   ""emp"") as t6
+group by ename;",2,"SELECT ""o_orderstatus"", 
+       ""o_clerk"", 
+       ""o_comment"" 
+FROM   ""orders"" 
+WHERE  ""o_orderstatus"" LIKE '%' 
+                            || 'F' 
+UNION 
+SELECT ""o_orderstatus"", 
+       ""o_clerk"", 
+       ""o_comment"" 
+FROM   ""orders"";    ","SELECT ""o_orderstatus"", 
+       ""o_clerk"", 
+       ""o_comment"" 
+FROM   (SELECT ""o_orderstatus"", 
+               ""o_clerk"", 
+               ""o_comment"" 
+        FROM   ""orders"" 
+        WHERE  ""o_orderstatus"" LIKE '%' 
+                                    || 'F' 
+        UNION ALL 
+        SELECT ""o_orderstatus"", 
+               ""o_clerk"", 
+               ""o_comment"" 
+        FROM   ""orders"") AS ""t6"" 
+GROUP  BY ""o_orderstatus"", 
+          ""o_clerk"", 
+          ""o_comment""; ",2.7
+28,PostgreSQL,Yes,"Unconfirmed (Future/missing optimization), Not Fixed, Unique",https://www.postgresql.org/message-id/CAApHDvrAgN4APYrsoMGoAhps6zsa2SEom5QW%2BO-ZqEpjggm-6w%40mail.gmail.com,,suboptimal behavior related to the DISTINCT operator,"SELECT DISTINCT dept.name,
+                d1.bonus_sal,
+                dept.deptno
+FROM
+  (SELECT bonus.sal AS bonus_sal
+   FROM bonus
+   WHERE (bonus.ename LIKE '%' || 'Mixon')
+     OR bonus.sal > 5880) AS d1
+LEFT OUTER JOIN dept ON TRUE
+WHERE (dept.deptno * 47) <= 4013
+LIMIT 13
+","SELECT ""dept9"".""name"",
+       ""t63"".""sal"" AS ""bonus_sal"",
+       ""dept9"".""deptno""
+FROM
+  (SELECT ""sal""
+   FROM ""bonus""
+   WHERE ""ename"" LIKE '%' || 'Mixon'
+     OR ""sal"" > 5880) AS ""t63""
+LEFT JOIN ""dept"" AS ""dept9"" ON TRUE
+WHERE ""dept9"".""deptno"" * 47 <= 4013
+GROUP BY ""dept9"".""name"",
+         ""t63"".""sal"",
+         ""dept9"".""deptno"" FETCH NEXT 13 ROWS ONLY",2.3,"SELECT DISTINCT d0.lineitem_l_shipmode 
+FROM            ( 
+                       SELECT lineitem.l_shipmode AS lineitem_l_shipmode 
+                       FROM   lineitem 
+                       WHERE  lineitem.l_shipinstruct IS distinct 
+                       FROM   'COLLECT COD              ') AS d0 
+WHERE           d0.lineitem_l_shipmode IS DISTINCT 
+FROM            'MAIL'","SELECT   d0.lineitem_l_shipmode 
+FROM     ( 
+                SELECT lineitem.l_shipmode AS lineitem_l_shipmode 
+                FROM   lineitem 
+                WHERE  lineitem.l_shipinstruct IS distinct 
+                FROM   'COLLECT COD              ') AS d0 
+WHERE    d0.lineitem_l_shipmode IS DISTINCT 
+FROM     'MAIL' 
+GROUP BY d0.lineitem_l_shipmode",3.1
+29,PostgreSQL,Yes,"Unconfirmed (Future/missing optimization), Not Fixed, Unique",https://www.postgresql.org/message-id/CAMbWs4-1wY4WZtvcb-oRwL_03KRuUE8MaNza52Ytf5GU7dEMzg%40mail.gmail.com,"Although the developers did not acknowledge the issue, they do confirm that it is due to a missing optimization rule.",suboptimal behavior related to the INNER JOIN operator,"SELECT     *
+FROM       (
+                  SELECT *
+                  FROM   bonus
+                  WHERE  sal = 752) AS ""t37""
+INNER JOIN
+           (
+                  SELECT *
+                  FROM   emp
+                  WHERE  ""empno"" + 77 <= 1100000
+                  AND    ""ename"" LIKE '%') AS ""t38""
+ON         ""t38"".""empno"" - 177 < ""t37"".sal FETCH next 100 rows
+only","SELECT     *
+FROM       (
+                  SELECT *
+                  FROM   bonus
+                  WHERE  sal = 752) AS ""t37""
+INNER JOIN
+           (
+                  SELECT *
+                  FROM   emp
+                  WHERE  ""empno"" + 77 <= 1100000
+                  AND    ""ename"" LIKE '%') AS ""t38""
+ON         ""t38"".""empno"" - 177 < 752 FETCH next 100 rows only",10.5,"SELECT     * 
+FROM       ( 
+                  SELECT * 
+                  FROM   ""partsupp"" 
+                  WHERE  ""ps_suppkey"" = 752) AS ""t37"" 
+INNER JOIN 
+           ( 
+                  SELECT * 
+                  FROM   ""part"" 
+                  WHERE  ""p_partkey"" + 77 <= 1 
+                  AND    ""p_brand"" LIKE '%%  ') AS ""t38"" 
+ON         ""t38"".""p_partkey"" - 177 < ""t37"".""ps_suppkey"" FETCH next 1 rows
+only","SELECT     * 
+FROM       ( 
+                  SELECT * 
+                  FROM   ""partsupp"" 
+                  WHERE  ""ps_suppkey"" = 752) AS ""t37"" 
+INNER JOIN 
+           ( 
+                  SELECT * 
+                  FROM   ""part"" 
+                  WHERE  ""p_partkey"" + 77 <= 1 
+                  AND    ""p_brand"" LIKE '%%  ') AS ""t38"" 
+ON         ""t38"".""p_partkey"" - 177 < 752 FETCH next 1 rows only",3.1
+30,PostgreSQL,Yes,"Unconfirmed (Future/missing optimization), Not Fixed, Unique",https://www.postgresql.org/message-id/3821998.1614093133%40sss.pgh.pa.us,,suboptimal behavior related to the GROUP BY operator (aggregate merge),"SELECT ""ename""
+FROM (SELECT ""ename""
+FROM ""emp""
+WHERE ""ename"" NOT LIKE '13-750-942-6364'
+GROUP BY ""ename"", ""sal"") AS ""t2""
+GROUP BY ""ename"";","SELECT ""ename""
+FROM ""emp""
+WHERE ""ename"" NOT LIKE '13-750-942-6364'
+GROUP BY ""ename"";",3.1,"SELECT   ""t13"".""c_acctbal"" 
+FROM     ( 
+                    SELECT     ""t11"".""o_comment"", 
+                               ""t12"".""c_nationkey"", 
+                               ""t12"".""c_acctbal"" 
+                    FROM       ( 
+                                      SELECT * 
+                                      FROM   ""orders"" 
+                                      WHERE  ""o_orderstatus"" = 'F') AS ""t11""
+
+
+
+                    INNER JOIN 
+                               ( 
+                                      SELECT * 
+                                      FROM   ""customer"" 
+                                      WHERE  ""c_nationkey"" <= 4 
+                                      AND    ""c_name"" =
+'Customer#000000005') AS ""t12"" 
+                    ON         ""t11"".""o_custkey"" > ""t12"".""c_custkey"" 
+                    GROUP BY   ""t11"".""o_comment"", 
+                               ""t12"".""c_nationkey"", 
+                               ""t12"".""c_acctbal"") AS ""t13"" 
+GROUP BY ""t13"".""c_acctbal"" offset 8 rowsFETCH next 18 rows only ","SELECT     ""t23"".""c_acctbal"" 
+FROM       ( 
+                  SELECT * 
+                  FROM   ""orders"" 
+                  WHERE  ""o_orderstatus"" = 'F') AS ""t22"" 
+INNER JOIN 
+           ( 
+                  SELECT * 
+                  FROM   ""customer"" 
+                  WHERE  ""c_nationkey"" <= 4 
+                  AND    ""c_name"" = 'Customer#000000005') AS ""t23"" 
+ON         ""t22"".""o_custkey"" > ""t23"".""c_custkey"" 
+GROUP BY   ""t23"".""c_acctbal"" offset 8 rowsFETCH next 18 rows only
+
+",3.8
+31,PostgreSQL,Yes,"Unconfirmed (Future/missing optimization), Not Fixed, Unique",https://www.postgresql.org/message-id/CAApHDvqxFMOu-2M0mGsYLXt_b5Ptqti8ceMkeOePhwrULF4vXA%40mail.gmail.com,The developers recommended that we simplify the queries and make them more realistic.,suboptimal behavior related to the LEFT JOIN and ORDER operator,"select empno, ename, job, mgr
+from (select * from emp) as t1 left join dept on true 
+order by t1.sal limit 14;","select empno, ename, job, mgr
+from (select ename from emp order by sal limit 14) as t1 left join dept on true 
+order by t1.sal limit 14;",555.6,"SELECT    ""orders3"".""o_comment"", 
+          ""orders3"".""o_orderstatus"", 
+          ""orders3"".""o_orderkey"", 
+          ""t17"".""ps_partkey"", 
+          ""t17"".""ps_supplycost"", 
+          ""t17"".""ps_comment"", 
+          ""orders3"".""o_clerk"", 
+          ""orders3"".""o_totalprice"", 
+          ""t17"".""ps_availqty"", 
+          ""t17"".""ps_suppkey"" 
+FROM      ( 
+                 SELECT * 
+                 FROM   ""partsupp"" 
+                 WHERE  ""ps_comment"" LIKE ', even theodolites. regular, final theodolites eat after the carefully pending foxes. furiously regular deposits sleep slyly. carefully bold realms above the ironic dependencies haggle careful') AS ""t17""
+LEFT JOIN ""orders""                                                                                                                                                                                                        AS ""orders3""
+ON        true 
+ORDER BY  ""t17"".""ps_supplycost""FETCH next 14 rows only","SELECT    ""orders3"".""o_comment"", 
+          ""orders3"".""o_orderstatus"", 
+          ""orders3"".""o_orderkey"", 
+          ""t17"".""ps_partkey"", 
+          ""t17"".""ps_supplycost"", 
+          ""t17"".""ps_comment"", 
+          ""orders3"".""o_clerk"", 
+          ""orders3"".""o_totalprice"", 
+          ""t17"".""ps_availqty"", 
+          ""t17"".""ps_suppkey"" 
+FROM      ( 
+                   SELECT   * 
+                   FROM     ""partsupp"" 
+                   WHERE    ""ps_comment"" LIKE ', even theodolites. regular, final theodolites eat after the carefully pending foxes. furiously regular deposits sleep slyly. carefully bold realms above the ironic dependencies haggle careful'
+                   ORDER BY ""ps_supplycost""FETCH next 14 rows only) AS ""t17"" 
+LEFT JOIN ""orders""                          AS ""orders3"" 
+ON        true 
+ORDER BY  ""t17"".""ps_supplycost""FETCH next 14 rows only",24
+32,PostgreSQL,Yes,"Unconfirmed (False Positive), Unique",https://www.postgresql.org/message-id/CAMbWs4-p-j04L7AHzEnMhknG0W-bZdB8k26x88b2Zd8S%2BNsdpQ%40mail.gmail.com,,suboptimal behavior related to string comparison,"SELECT emp.slacker,
+       2333 AS c_3812,
+       emp.deptno
+FROM emp
+FULL OUTER JOIN bonus ON bonus.sal >= emp.empno
+WHERE bonus.ename IS NOT DISTINCT
+  FROM ' Annamaria Mixon'
+  AND emp.comm < 71
+LIMIT 18
+","SELECT ""emp2"".""slacker"",
+       2333 AS ""c_3812"",
+       ""emp2"".""deptno""
+FROM ""emp"" AS ""emp2""
+FULL JOIN ""bonus"" AS ""bonus2"" ON ""emp2"".""empno"" <= ""bonus2"".""sal""
+WHERE (""bonus2"".""ename"" IS NULL
+       AND ' Annamaria Mixon' IS NULL
+       OR ""bonus2"".""ename"" = ' Annamaria Mixon' IS TRUE)
+  AND ""emp2"".""comm"" < 71 FETCH NEXT 18 ROWS ONLY",4.7,"SELECT          nation.n_name AS n_name 
+FROM            partsupp 
+LEFT OUTER JOIN nation 
+ON   true 
+WHERE           nation.n_name IS NOT distinct FROM 'ALGERIA';  ","SELECT nation.n_name AS n_name 
+FROM   partsupp 
+       LEFT OUTER JOIN nation 
+                    ON true 
+WHERE  nation.n_name = 'ALGERIA'; ",16.4
+33,PostgreSQL,Waiting for authorization to edit Wiki page,Pending,N/A,"The developers recommended that we report these issues as a Wiki page that describes the potential performance bugs as future/missing optimizations. We are currently waiting to receive the authorization to publish that page on the official PostgreSQL Wiki.
+",suboptimal behavior related to the GROUP BY and JOIN,"SELECT dept.deptno
+FROM emp
+RIGHT JOIN dept ON emp.deptno = dept.deptno
+GROUP BY dept.deptno","SELECT deptno
+FROM dept",33,N/A,N/A,N/A
+34,PostgreSQL,Waiting for authorization to edit Wiki page,Pending,N/A,"The developers recommended that we report these issues as a Wiki page that describes the potential performance bugs as future/missing optimizations. We are currently waiting to receive the authorization to publish that page on the official PostgreSQL Wiki.
+","suboptimal behavior related to the INNER JOIN, UNION","SELECT *
+FROM
+  (SELECT deptno
+   FROM emp
+   WHERE deptno < 400) AS t0
+INNER JOIN
+  (SELECT deptno
+   FROM emp
+   WHERE deptno > 700
+   UNION ALL SELECT deptno
+   FROM emp) AS t400 ON t0.deptno = t400.deptno","SELECT *
+FROM
+  (SELECT deptno
+   FROM emp
+   WHERE deptno < 400) AS t6
+INNER JOIN
+  (SELECT *
+   FROM
+     (SELECT deptno
+      FROM emp
+      WHERE deptno > 700
+      UNION ALL SELECT deptno
+      FROM emp) AS t10
+   WHERE deptno < 400) AS t11 ON t6.deptno = t11.deptno",3.2,N/A,N/A,N/A
+35,PostgreSQL,Waiting for authorization to edit Wiki page,Pending,N/A,"The developers recommended that we report these issues as a Wiki page that describes the potential performance bugs as future/missing optimizations. We are currently waiting to receive the authorization to publish that page on the official PostgreSQL Wiki.
+",suboptimal behavior related to aggregate function and DISTINCT,"SELECT Count(DISTINCT( bonus.job )) AS c_1532
+FROM   bonus
+WHERE  bonus.job NOT LIKE 'Director o'
+       AND bonus.comm > 7
+        OR ( bonus.job LIKE '%'
+                            || 'anc'
+                            || '%' )
+GROUP  BY bonus.comm,
+          bonus.ename; ","SELECT COUNT(""job"") AS ""c_1532""
+FROM
+  (SELECT ""ename"",
+          ""job"",
+          ""comm""
+   FROM
+     (SELECT ""ename"",
+             ""job"",
+             ""comm""
+      FROM ""bonus"") AS ""t25""
+   WHERE ""comm"" > 7
+     AND NOT ""job"" LIKE 'Director o'
+     OR ""job"" LIKE '%anc%'
+   GROUP BY ""ename"",
+            ""job"",
+            ""comm"") AS ""t27""
+GROUP BY ""ename"",
+         ""comm""",1.9,N/A,N/A,N/A
+36,PostgreSQL,Waiting for authorization to edit Wiki page,Pending,N/A,"The developers recommended that we report these issues as a Wiki page that describes the potential performance bugs as future/missing optimizations. We are currently waiting to receive the authorization to publish that page on the official PostgreSQL Wiki.
+",suboptimal behavior related to timestamp and aggregate function,"SELECT 2333, ""ename""
+FROM ""emp""
+WHERE EXTRACT(YEAR
+              FROM ""hiredate"") >= 2016
+  OR (""empno"" * 52 <= 1362
+      OR ""ename"" LIKE ' Lue Mahula')
+GROUP BY ""comm"",
+         ""ename"",
+         ""job"" FETCH NEXT 13 ROWS ONLY","SELECT 2333,""ename""
+FROM ""emp""
+WHERE ""hiredate"" >= TIMESTAMP '2016-01-01 00:00:00'
+  OR (""empno"" * 52 <= 1362
+      OR ""ename"" LIKE ' Lue Mahula')
+GROUP BY ""comm"",
+         ""ename"",
+         ""job"" FETCH NEXT 13 ROWS ONLY",1.8,N/A,N/A,N/A
+37,PostgreSQL,Waiting for authorization to edit Wiki page,Pending,N/A,"The developers recommended that we report these issues as a Wiki page that describes the potential performance bugs as future/missing optimizations. We are currently waiting to receive the authorization to publish that page on the official PostgreSQL Wiki.
+",suboptimal behavior related to the LEFT JOIN,"SELECT ""t35"".""deptno"",
+       ""t35"".""name""
+FROM
+  (SELECT ""t34"".""deptno"" AS ""dept_deptno"",
+          ""dept21"".""deptno"",
+          ""dept21"".""name""
+   FROM
+     (SELECT *
+      FROM ""dept""
+      WHERE ""name"" LIKE '%' || '2' || '%'
+        AND ""deptno"" < 2541) AS ""t34""
+   LEFT JOIN ""dept"" AS ""dept21"" ON TRUE) AS ""t35""
+WHERE (""t35"".""dept_deptno"" + 60 > 9571
+       AND ""t35"".""dept_deptno"" >= 2739
+       OR ""t35"".""deptno"" < 2739)
+  AND ""t35"".""name"" NOT IN
+    (SELECT 'literal col string' AS ""c_3011""
+     FROM ""dept""
+     WHERE ""name"" LIKE '%' || '2')","SELECT ""t35"".""deptno"",
+       ""t35"".""name""
+FROM   (SELECT ""t34"".""deptno"" AS ""dept_deptno"",
+               ""dept21"".""deptno"",
+               ""dept21"".""name""
+        FROM   (SELECT *
+                FROM   ""dept""
+                WHERE  ""name"" LIKE '%'
+                                   || '2'
+                                   || '%'
+                       AND ""deptno"" < 2541) AS ""t34""
+               LEFT JOIN ""dept"" AS ""dept21""
+                      ON true) AS ""t35""
+WHERE  ( ""t35"".""deptno"" < 2739 )
+       AND ""t35"".""name"" NOT IN (SELECT 'literal col string' AS ""c_3011""
+                                FROM   ""dept""
+                                WHERE  ""name"" LIKE '%'
+                                                   || '2'); ",6.8,N/A,N/A,N/A
+38,PostgreSQL,Waiting for authorization to edit Wiki page,Pending,N/A,"The developers recommended that we report these issues as a Wiki page that describes the potential performance bugs as future/missing optimizations. We are currently waiting to receive the authorization to publish that page on the official PostgreSQL Wiki.
+",suboptimal behavior related to SET operation,"SELECT dt.name
+FROM (
+        (SELECT 2333 AS c_4800,
+                dept.name
+         FROM dept
+         WHERE dept.name NOT LIKE '02'
+         )
+      EXCEPT ALL
+        (SELECT dept.deptno,
+                'literal col string' AS c_4357
+         FROM dept
+         WHERE (dept.name LIKE '%' || 'KXI')
+           AND dept.name LIKE 'JK1'
+         )) AS dt
+WHERE dt.name LIKE '04'
+  OR (dt.c_4800 + 53) <= 941
+LIMIT 2","SELECT dt.name
+FROM (
+        (SELECT 2333 AS c_4800,
+                dept.name
+         FROM dept
+         WHERE dept.name NOT LIKE '02' and name LIKE '04' or 2333 + 53 <= 941
+         )
+      EXCEPT ALL
+        (SELECT dept.deptno,
+                'literal col string' AS c_4357
+         FROM dept
+         WHERE (dept.name LIKE '%' || 'KXI')
+           AND dept.name LIKE 'JK1'
+         and name LIKE '04' or deptno + 53 <= 941)) AS dt
+LIMIT 2",2.2,N/A,N/A,N/A
+39,PostgreSQL,Waiting for authorization to edit Wiki page,Pending,N/A,"The developers recommended that we report these issues as a Wiki page that describes the potential performance bugs as future/missing optimizations. We are currently waiting to receive the authorization to publish that page on the official PostgreSQL Wiki.
+",suboptimal behavior related to aggregate function and DISTINCT,"SELECT max(distinct('literal col string')) AS c_1351,
+       2333 AS c_1528,
+       2333 AS c_2188
+FROM bonus
+WHERE (bonus.sal - 5) < 7049
+  OR (bonus.ename LIKE '%' || 'elko' || '%')
+GROUP BY bonus.job,
+         bonus.sal,
+         bonus.sal","SELECT MAX('literal col string') AS ""c_1351"",
+       2333 AS ""c_1528"",
+       2333 AS ""c_2188""
+FROM ""bonus""
+WHERE ""sal"" - 5 < 7049
+  OR ""ename"" LIKE '%elko%'
+GROUP BY ""job"",
+         ""sal""",3.2,N/A,N/A,N/A
