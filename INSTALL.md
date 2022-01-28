@@ -3,36 +3,36 @@
 The artifact consists of four main components:
 
 1. An implementation of `AMOEBA` to find all performance bugs reported in the paper.
-2. A spreadsheet containing a list of bugs that we reported and additional meta information.
-3. A spreadsheet containing a list of mutation rules that `AMOEBA` uses.
-4. A spreadsheet listing SQL features that `AMOEBA` covers.
+2. A spreadsheet named `bugs-found` contains a list of bugs that we reported and additional meta information.
+3. A spreadsheet named `mutation-rules` contains a list of mutation rules that `AMOEBA` uses.
+4. A spreadsheet named `SQL-features` lists SQL features that `AMOEBA` covers.
 
 They are expected to be usable with minimal effort.
 
 
 ## `AMOEBA`
 
-`AMOEBA` is a toolchain that aims at finding performance bugs in database managment systems (DBMSs).
+`AMOEBA` is a toolchain that aims at finding performance bugs in database management systems (DBMSs).
 
 Currently supported DBMSs:
 1. PostgreSQL (v12.3)
 2. CockroachDB (v20.2.0-alpha)
 
 ## Build Instruction
-Currently we test `AMOEBA` on a docker container based on Ubuntu 20.04.3. So we expect `AMOEBA` can be easily set up.
+Currently, we test `AMOEBA` on a docker container based on Ubuntu 20.04.3. So we expect `AMOEBA` can be easily set up.
 The build commands for `AMOEBA` is as follows:
 
 1. Prerequisites:
 ```
-docker pull icsesub2022/paper360:artifact
-docker run --net=host -it --user postgres icsesub2022/paper360:artifact bash
+docker pull icsesub2022/paper360:artifact1
+docker run --net=host -it --cpus 8 -m 8G --user postgres -v {/a/directory/in/your/host}:/home/postgres/exp icsesub2022/paper360:artifact1 bash
 // after starting and attaching to the docker container, run the following commands: 
 cd /workspace
 eval "$(direnv hook bash)"
 start_pg13.sh
 start_cockroach.sh
 ```
-Because the docker image we provide already has both the PostgreSQL and CockroachDB installed, the only scripts need to be run before launching `AMOEBA` are `start_pg13.sh` and `start_cockroach.sh`. They are used to start PostgreSQL and CockroachDB, respectively. 
+Because the docker image we provide already has both the PostgreSQL and CockroachDB installed, the only scripts that need to be run before launching `AMOEBA` are `start_pg13.sh` and `start_cockroach.sh`. They are used to start PostgreSQL and CockroachDB, respectively. 
 
 2. Build the `MUTATOR` of `AMOEBA`:
 
@@ -44,7 +44,7 @@ cd /workspace/calcite-fuzzing
 ```
 
 ## Run `AMOEBA` with Custom Parameters
-`AMOEBA` is highly configurable, a launch command template looks like the following:
+`AMOEBA` is configurable, a launch command template looks like the following:
 ```
 $timeout {total_timeout} ./test_driver.py --workers {num_workers} --output {outputfolder} --queries {num_queries_per_worker} --rewriter ./calcite-fuzzing --dbms={dbms_undertest} --validate --num_loops={num_feedbackloops} --feedback={conf_feedback} --dbconf=db_conf_demo.json --query_timeout {per_query_timeout}
 
@@ -65,7 +65,7 @@ You can customize the value of the following options:
 For example, you can launch `AMOEBA` with the following command:
 
 ```
-timeout 18000 ./test_driver.py --workers 1 --output ~/test --queries 100 --rewriter ./calcite-fuzzing --dbms=postgresql --validate --num_loops=0 --feedback=both --dbconf=db_conf_demo.json --query_timeout 10
+timeout 3600 ./test_driver.py --workers 1 --output /home/postgres/exp/1 --queries 200 --rewriter ./calcite-fuzzing --dbms=postgresql --validate --num_loops=100 --feedback=none --dbconf=db_conf_demo.json --query_timeout 30
 ```
 If `AMOEBA` is working correctly, you should expect to see the following progress information is printed:
 ```
@@ -84,8 +84,8 @@ find plan diff /home/postgres/test/190156/0/out/q13.sql
 compare plan cost /home/postgres/test/190156/0/out/q18.sql
 compare plan cost /home/postgres/test/190156/0/out/q23.sql
 ```
-This command should complete within 15 minutes. You can check the generated intermediate results in `~/testexp`. If `AMOEBA` discovers potential performance bugs, the generated bug report will live at `~/testexp/bugs.md`.
+This example command should complete within 20 minutes. You can check the generated intermediate results in `/home/postgres/exp/1`. If `AMOEBA` discovers potential performance bugs, the generated bug report will live at `/home/postgres/exp/1/bugs.md`.
 
-The shortcut CTRL+C can be used to terminate `AMOEBA` manually. Otherwise, `AMOEBA` will terminate either after a specified experiment timeout is reached or after a specified number of base queries have been examined. The option `total_timeout` controls the experiment timeout. The options `workers`,  `queries`, and `num_loops` ultimately determine the number of base queries that `AMOEBA` is going to examine.
+The shortcut CTRL+C can be used to terminate `AMOEBA` manually. Otherwise, `AMOEBA` will terminate either after a specified experiment timeout is reached or after a specified number of base queries have been examined. The option `total_timeout` controls the experiment timeout. The options `workers`,  `queries`, and `num_loops` altogether determine the number of base queries that `AMOEBA` is going to examine.
 
 
