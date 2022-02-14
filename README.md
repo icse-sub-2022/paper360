@@ -3,9 +3,10 @@
 The artifact consists of four main components:
 
 1. An implementation of `AMOEBA` to find all performance bugs reported in the paper.
-2. A spreadsheet named `bugs-found` contains a list of bugs that we reported and additional meta information.
-3. A spreadsheet named `mutation-rules` contains a list of mutation rules that `AMOEBA` uses.
-4. A spreadsheet named `SQL-features` lists SQL features that `AMOEBA` covers.
+2. A docker image for executing `AMOEBA` and inspecting its codebase.
+3. A spreadsheet named `bugs-found` contains a list of bugs that we reported and additional meta information.
+4. A spreadsheet named `mutation-rules` contains a list of mutation rules that `AMOEBA` uses.
+5. A spreadsheet named `SQL-features` lists SQL features that `AMOEBA` covers.
 
 
 ## `AMOEBA` 
@@ -14,8 +15,8 @@ The artifact consists of four main components:
 `AMOEBA` is a tool that we created to automatically find performance bugs in Database Management Systems (DBMS). As stated in the `INSTALL.md` document, the easiest way to get started is the following:
 
 ```
-docker pull icsesub2022/paper360:artifact
-docker run --net=host -it --cpus 2 -m 8G --user postgres -v {/a/directory/in/your/host}:/home/postgres/exp icsesub2022/paper360:artifact1 bash
+docker pull icsesub2022/paper360:artifact1
+docker run --net=host -it --cpus 2 -m 8G --user postgres -v </a/directory/in/your/host>:/home/postgres/exp icsesub2022/paper360:artifact1 bash
 // after starting and attaching to the docker container, run the following commands: 
 cd /workspace
 eval "$(direnv hook bash)"
@@ -29,12 +30,26 @@ At a high level, `AMOEBA` has three main components:
 3. `VALIDATOR` takes a set of equivalent queries as input and generates a list of performance bug reports. It executes each pair
 of equivalent queries on the target DBMS and observes whether any pair exhibits a significant difference in their runtime performance. If that is the case, it indicates the likely presence of a performance bug in the DBMS.
 
-We implement these components in the following directories or files:
-1. `GENERATOR` is implemented in `/workspace/sqlfuzz`.
-2. `MUTATOR` is implemented in `/workspace/calcite-fuzzing`.
-3. `VALIDATOR` is implemented in `/workspace/validator.py`.
+## High-level overview of `AMOEBA`'s code repository (i.e., /workspace) 
+We implement three main components of `AMOEBA` in the following directories or files:
+1. `GENERATOR` is implemented in `/workspace/sqlfuzz`. Specifically, you can find the logic of how does it construct query objects in the file `/workspace/sqlfuzz/src/sqlfuzz/mutator.py`.
+2. `MUTATOR` is implemented in `/workspace/calcite-fuzzing`. In specific, you can find the high-level logic of how does it mutate a query in the file `/workspace/calcite-fuzzing/core/src/test/java/org/apache/calcite/test/Transformer.java.`
+3. `VALIDATOR` is implemented in `/workspace/validator.py`, which provides the logic of how does it extract the cost of query execution plans and time the query execution.
+In addition, in `/workspace/test_driver.py`, you can find how does `AMOEBA` coordinates the invocations of these three components.
 
-In addition, `AMOEBA` coordinates the invocations of these three components in `/workspace/test_driver.py`.
+There are three other directories that are worth mentioning here:
+1. in `/workspace/amoeba_conf/`, you can find files for configuring and fine-tuning the `AMOEBA`.
+2. in `/workspace/demo100`, you can find schemas and data contents we used to set up our example database instance. Since they are stored in `.csv` format, you can re-use them to set up other database instances.
+3. in `/workspace/utils`, you can find scripts for starting and stopping the `PostgreSQL` and `CockroachDB`.
+
+## How to access and inspect the container's directories and files:
+There are two ways:
+1. Use an IDE to attach to the running container of `AMOEBA`, which allows users to inspect its directories and files the same way as inspecting a project on a local machine. I recommend using `VSCODE` and its [`Remote-Containers`](https://code.visualstudio.com/docs/remote/attach-container) extension to achieve this.
+2. Alternatively, you can also use the `docker cp` command to copy files of the container to a local directory. For example, in the host machine's terminal, you can run the following command to copy `AMOEBA`'s code repository to a local directory.
+```
+docker cp <containerId>:/workspace/ </a/directory/in/your/host>
+```
+Notably, you can run the `docker ps` command on the host machine to find the `<containerId>`.
 
 ## Run `AMOEBA` with Custom Parameters
 `AMOEBA` is configurable, a launch command template looks like the following:
